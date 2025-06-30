@@ -3,10 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Маленькая Война 7.0</title>
+  <title>Маленькая Война 8.0</title>
   
 
 <style>
+
+/* Запрет выделения текста */
+body, html, * {
+  user-select: none;           /* Запрет выделения текста во всех браузерах */
+  -webkit-user-select: none;   /* Safari */
+  -moz-user-select: none;      /* Firefox */
+  -ms-user-select: none;       /* IE10+ */
+}
+
+/* Запрет контекстного меню (правый клик) */
+body {
+  -webkit-touch-callout: none; /* Запрет вызова контекстного меню на iOS */
+}
+
 
 html, body {
   margin: 0;
@@ -47,7 +61,7 @@ canvas {
   margin: auto;
   background: #000;
   touch-action: none;
-  pointer-events: none;
+  /* pointer-events: none; */
 }
 
 .button-panel {
@@ -828,6 +842,9 @@ function gameLoop(time = 0) {
   // Инициализация
   restartGame();
   requestAnimationFrame(gameLoop);
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+
 
   // Для мобильного экрана - запрет скролла при касании канваса
   canvas.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
