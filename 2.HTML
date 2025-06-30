@@ -3,93 +3,121 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Маленькая Война 5.0</title>
+  <title>Маленькая Война 6.0</title>
   
 
 <style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background: #0a0a0a;
-    color: #fff;
-    overflow: hidden;
-  }
-  #game {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
-  .header, .footer {
-    flex-shrink: 0;
-    padding: 10px;
-    text-align: center;
-    background: linear-gradient(to right, #1e1e1e, #2c2c2c);
-    font-size: 14px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-  }
-  .header span, .footer span {
-    margin: 0 10px;
-  }
-  .game-area {
-    flex: 1;
-    position: relative;
-    background: #222;
-  }
-  canvas {
-    display: block;
-    margin: auto;
-    background: #000;
-    touch-action: none;
-    pointer-events: none;
-  }
-  .button-panel {
-    display: flex;
-    padding: 5px;
-    background: #111;
-    height: 25vh;
-  }
-  .column {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    gap: 5px;
-    justify-content: space-evenly;
-  }
-  button {
-    cursor: pointer;
-    flex: 1;
-    background: linear-gradient(to bottom, #333, #222);
-    color: #fff;
-    border: 2px solid #555;
-    border-radius: 10px;
-    padding: 8px;
-    font-size: 12px;
-    font-weight: bold;
-    box-shadow: 0 0 10px rgba(0,255,0,0);
-    transition: all 0.3s ease;
-    text-align: left;
-    white-space: pre-line;
-    position: relative;
-    overflow: hidden; /* важно для внутреннего индикатора */
-  }
-  button:hover:not(:disabled), button:focus-visible:not(:disabled) {
-    box-shadow: 0 0 15px rgba(0,255,0,0.5);
-    background: linear-gradient(to bottom, #444, #222);
-  }
-  button:disabled {
-    background: #2a2a2a;
-    color: #666;
-    border-color: #333;
-    box-shadow: none;
-  }
-  /* Убрали старый ::after для cooldown, т.к. используем внутренний элемент */
-/* Новый прогресс-бар отката */
+
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background: #0a0a0a;
+  color: #fff;
+  overflow: hidden;
+}
+
+#game {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.header, .footer {
+  flex-shrink: 0;
+  padding: 10px;
+  text-align: center;
+  background: linear-gradient(to right, #1e1e1e, #2c2c2c);
+  font-size: 14px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+.header span, .footer span {
+  margin: 0 10px;
+}
+
+.game-area {
+  flex: 1;
+  position: relative;
+  background: #222;
+}
+
+canvas {
+  display: block;
+  margin: auto;
+  background: #000;
+  touch-action: none;
+  pointer-events: none;
+}
+
+.button-panel {
+  display: flex;
+  padding: 5px;
+  background: #111;
+  height: 25vh;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 8px;
+  justify-content: flex-start;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+/* Кнопки */
+button {
+  cursor: pointer;
+  flex: none;
+  min-height: 56px;
+  background: linear-gradient(to bottom, #333, #222);
+  color: #fff;
+  border: 2px solid #555;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: bold;
+  box-shadow: 0 0 10px rgba(0,255,0,0);
+  transition: all 0.3s ease;
+  text-align: left;
+  white-space: pre-line;
+  position: relative;
+  overflow: hidden; /* важно для внутреннего индикатора */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Текст внутри кнопки - контейнер для текста */
+button .btn-text {
+  flex-grow: 1;
+  line-height: 1.3;
+  user-select: none;
+}
+
+/* Hover и фокус */
+button:hover:not(:disabled), button:focus-visible:not(:disabled) {
+  box-shadow: 0 0 15px rgba(0,255,0,0.5);
+  background: linear-gradient(to bottom, #444, #222);
+}
+
+/* Отключённые кнопки */
+button:disabled {
+  background: #2a2a2a;
+  color: #666;
+  border-color: #333;
+  box-shadow: none;
+}
+
+/* Прогресс-бар кулдауна */
 button .cooldown-bar {
   position: absolute;
   bottom: 2px; /* небольшой отступ от нижнего края */
   left: 0;
-  height: 4px;
+  height: 5px;
   width: 100%;
   background: #444;
   border-radius: 0 0 10px 10px;
@@ -104,35 +132,41 @@ button .cooldown-bar .progress {
   border-radius: 0 0 10px 10px;
 }
 
+/* Кнопка с подсветкой */
 button.glow {
   box-shadow: 0 0 10px #0f0;
 }
 
+/* Оверлей */
+#overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-direction: column;
+  display: none;
+  z-index: 10;
+  text-align: center;
+  padding: 20px;
+}
 
-  #overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.85);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    flex-direction: column;
-    display: none;
-    z-index: 10;
-    text-align: center;
-    padding: 20px;
-  }
-  #overlay button {
-    margin-top: 15px;
-    font-size: 16px;
-    padding: 8px 15px;
-    display: none;
-  }
+#overlay button {
+  margin-top: 15px;
+  font-size: 16px;
+  padding: 8px 15px;
+  display: none;
+}
+
+
+
+
 </style>
 
 
@@ -254,27 +288,30 @@ function generateUnitButtons() {
 
   unitTypes.forEach((unit, i) => {
     const btn = document.createElement('button');
-    btn.disabled = gold < unit.cost || (unit.buyCooldown ? (now - (buyCooldowns[i] || 0) < unit.buyCooldown) : false);
 
-    // Структура кнопки
+    const onCooldown = unit.buyCooldown ? (now - (buyCooldowns[i] || 0) < unit.buyCooldown) : false;
+    btn.disabled = gold < unit.cost || onCooldown;
+
     btn.innerHTML = `
       <div class="btn-text">
-        ${unit.emoji} ${unit.name}<br>
-        💰${unit.cost} | ❤️${unit.hp} | ⚔️${unit.damage}
+        <div class="unit-name">${unit.emoji} ${unit.name}</div>
+        <div class="unit-stats">
+          <span>💰${unit.cost}</span> | 
+          <span>❤️${unit.hp}</span> | 
+          <span>⚔️${unit.damage}</span>
+        </div>
+        <div class="desc">Кулдаун покупки: ${(unit.buyCooldown / 1000).toFixed(1)} сек.</div>
       </div>
       <div class="cooldown-bar"><div class="progress"></div></div>
     `;
 
-    // Добавляем класс cooldown, если на откате
-    if (btn.disabled && unit.buyCooldown && (now - (buyCooldowns[i] || 0) < unit.buyCooldown)) {
+    if (onCooldown) {
       btn.classList.add('cooldown');
     } else {
       btn.classList.remove('cooldown');
     }
 
-    btn.addEventListener('click', () => {
-      buyUnit(i);
-    });
+    btn.addEventListener('click', () => buyUnit(i));
 
     unitsPanel.appendChild(btn);
   });
@@ -282,17 +319,22 @@ function generateUnitButtons() {
 
 
 
-  function generateUpgradeButtons() {
+function generateUpgradeButtons() {
   upgradesPanel.innerHTML = '';
+
   upgrades.forEach((upg, i) => {
     const btn = document.createElement('button');
-    btn.textContent = `⬆️ Улучшение ${i + 1}\n💰${upg.cost}`;
+
     btn.disabled = i !== upgradeLevel || gold < upg.cost;
-    
+
+    btn.innerHTML = `
+      <div class="upgrade-title">⬆️ Улучшение ${i + 1}</div>
+      <div class="upgrade-cost">💰${upg.cost}</div>
+      <div class="upgrade-desc">${upg.description}</div>
+    `;
+
     btn.addEventListener('click', () => {
-      if (btn.disabled) return;  // Предотвращаем срабатывание на отключенной кнопке
-      
-      console.log('clicked upgrade', i);
+      if (btn.disabled) return;
       if (gold >= upg.cost && i === upgradeLevel) {
         gold -= upg.cost;
         goldEl.textContent = gold;
