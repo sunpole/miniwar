@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Маленькая Война</title>
+<style>
+  html, body {
+    margin:0; padding:0; font-family: sans-serif;
+    background: #111; color:#fff; overflow: hidden;
+  }
+  #game {
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  .header {
+    flex-shrink: 0; padding: 10px; text-align: center;
+    background: #222; font-size: 14px;
+    display: flex; justify-content: center; gap: 20px;
+  }
+  .header span {
+    user-select: none;
+  }
+  .game-area {
+    flex: 1; position: relative; background: #333;
+  }
+  canvas {
+    display: block; margin: auto; background: #222;
+    touch-action: none;
+  }
+  .button-panel {
+    display: flex; justify-content: space-between;
+    padding: 5px; background: #111;
+  }
+  .column {
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  button {
+    background: #444; color: #fff; border: 2px solid #888;
+    padding: 5px; font-size: 12px; position: relative;
+    overflow: hidden; min-width: 90px; white-space: pre-line;
+    cursor: pointer;
+    user-select: none;
+  }
+  button:disabled {
+    background: #222; color: #666; border-color: #333;
+    cursor: default;
+  }
+  #overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85); color: #fff;
+    display: none; align-items: center; justify-content: center;
+    font-size: 20px; flex-direction: column; z-index: 10;
+  }
+  #overlay button {
+    margin-top: 15px; font-size: 16px; padding: 8px 15px;
+    display: none;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <div class="header">
+    <span>💰 Золото: <span id="gold">100</span></span>
+    <span>🕒 Время: <span id="timer">60</span></span>
+    <span>🌊 Волна: <span id="wave">1</span></span>
+    <span>❤️: <span id="lives">5</span></span>
+  </div>
+  <div class="game-area">
+    <canvas id="canvas" width="360" height="360"></canvas>
+    <div id="overlay">
+      <div id="message"></div>
+      <button id="restartBtn">Начать заново</button>
+    </div>
+  </div>
+  <div class="button-panel">
+    <div class="column" id="units"></div>
+    <div class="column" id="upgrades"></div>
+    <div class="column">
+      <button id="waveBtn">▶ Старт Волны</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const goldEl = document.getElementById('gold');
+  const timerEl = document.getElementById('timer');
+  const waveEl = document.getElementById('wave');
+  const livesEl = document.getElementById('lives');
+  const overlay = document.getElementById('overlay');
+  const message = document.getElementById('message');
+  const restartBtn = document.getElementById('restartBtn');
+  const unitsPanel = document.getElementById('units');
+  const upgradesPanel = document.getElementById('upgrades');
+  const waveBtn = document.getElementById('waveBtn');
+
+  const W = canvas.width;
+  const H = canvas.height;
+
+  let gold = 100;
+  let lives = 5;
+  let wave = 1;
+  let waveTimer = 60;
+  let waveActive = false;
+  let upgradeLevel = 0;
+  let goldPerSec = 0;
+  let lastGoldTick = 0;
+  let entities = [];
+  let lastTime = 0;
+
+  const unitTypes = [
+    { name: 'Мечник', cost: 5, hp: 10, damage: 1, cooldown: 0.5, buyCooldown: 2000, color: 'blue', emoji: '⚔️' },
+    { name: 'Лучник', cost: 15, hp: 5, damage: 2, cooldown: 1, buyCooldown: 4000, color: 'white', emoji: '🏹' },
+    { name: 'Кузнец', cost: 30, hp: 20, damage: 6, cooldown: 2, buyCooldown: 10000, color: 'green', emoji: '🔨' }
+  ];
+
+  const upgrades = [
+    { cost: 100, effect: () => { goldPerSec += 1; } },
+    { cost: 250, effect: () => {
+      goldPerSec += 1;
+      unitTypes.forEach(u => u.buyCooldown = Math.max(500, u.buyCooldown - 200));
+    } },
+    { cost: 400, effect: () => {
+      goldPerSec += 1;
+      unitTypes.forEach(u => u.damage += 1);
+    } },
+    { cost: 600, effect: () => {
+      goldPerSec += 1;
+      unitTypes.forEach(u => u.buyCooldown = Math.max(500, u.buyCooldown - 200));
+    } },
+    { cost: 800, effect: () => {
+      goldPerSec += 1;
+      unitTypes.forEach(u => {
+        u.damage += 2;
+        u.buyCooldown = Math.max(500, u.buyCooldown - 200);
+      });
+    } }
+  ];
+
+  // Отслеживаем кулдауны покупки для кнопок
+  const buyCooldowns = [0,0,0];
+
+  function generateUnitButtons() {
+    unitsPanel.innerHTML = '';
+    unitTypes.forEach((unit, i) => {
+      const btn = document.createElement('button');
+      btn.textContent = `${unit.emoji} ${unit.name}\n💰${unit.cost} | ❤️${unit.hp} | ⚔️${unit.damage}`;
+      btn.disabled = gold < unit.cost;
+      btn.onclick = () => buyUnit(i);
+      unitsPanel.appendChild(btn);
+    });
+  }
+
+  function generateUpgradeButtons() {
+    upgradesPanel.innerHTML = '';
+    upgrades.forEach((upg, i) => {
+      const btn = document.createElement('button');
+      btn.textContent = `⬆️ Улучшение ${i+1}\n💰${upg.cost}`;
+      btn.disabled = i !== upgradeLevel || gold < upg.cost;
+      btn.onclick = () => {
+        if (gold >= upg.cost && i === upgradeLevel) {
+          gold -= upg.cost;
+          goldEl.textContent = gold;
+          upg.effect();
+          upgradeLevel++;
+          generateUpgradeButtons();
+          generateUnitButtons();
+        }
+      };
+      upgradesPanel.appendChild(btn);
+    });
+  }
+
+  function buyUnit(i) {
+    const now = Date.now();
+    const unit = unitTypes[i];
+    if (gold < unit.cost) return;
+    if (now - buyCooldowns[i] < unit.buyCooldown) return;
+    gold -= unit.cost;
+    goldEl.textContent = gold;
+    buyCooldowns[i] = now;
+    spawnUnit(unit);
+    generateUnitButtons();
+  }
+
+  function spawnUnit(u) {
+    // Случайное место, но не ближе 20px к краям
+    const x = 20 + Math.random() * (W - 40);
+    const y = 20 + Math.random() * (H - 40);
+    entities.push({
+      type: 'unit',
+      name: u.name,
+      hp: u.hp,
+      maxHp: u.hp,
+      damage: u.damage,
+      cooldown: u.cooldown,
+      x, y,
+      lastAttack: 0,
+      blink: false,
+      color: u.color,
+      emoji: u.emoji,
+      radius: 12
+    });
+  }
+
+  function spawnEnemy(t) {
+    const hp = t === 'red' ? 6 : 9;
+    const damage = t === 'red' ? 2 : 1;
+    const color = t === 'red' ? 'red' : 'yellow';
+    const emoji = t === 'red' ? '😡' : '😐';
+    const x = 20 + Math.random() * (W - 40);
+    const y = 20 + Math.random() * (H - 40);
+    entities.push({
+      type: 'enemy',
+      hp, maxHp: hp,
+      damage,
+      cooldown: 1,
+      x, y,
+      lastAttack: 0,
+      blink: false,
+      color,
+      emoji,
+      radius: 12
+    });
+  }
+
+  // Генерация врагов с минимумом 3 шт.
+  function generateEnemies() {
+    let hpSum = 0;
+    const power = Math.floor(gold / 2);
+    let tries = 0;
+    while ((hpSum < power || tries < 3) && tries < 50) {
+      const t = Math.random() < 0.5 ? 'red' : 'yellow';
+      const hp = t === 'red' ? 6 : 9;
+      if (hpSum + hp <= power || tries < 3) {
+        spawnEnemy(t);
+        hpSum += hp;
+      }
+      tries++;
+    }
+  }
+
+  // Расстояние между двумя сущностями
+  function distance(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  // Находит ближайшего юнита или врага (в зависимости от type)
+  function findNearest(from, type) {
+    let minDist = Infinity;
+    let target = null;
+    for (const e of entities) {
+      if (e.type !== type || e.hp <= 0) continue;
+      const d = distance(from, e);
+      if (d < minDist) {
+        minDist = d;
+        target = e;
+      }
+    }
+    return target;
+  }
+
+  // Двигает сущность a к b с учетом скорости и deltaTime
+  function moveTowards(a, b, speed, dt) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 1) {
+      a.x += (dx / dist) * speed * dt;
+      a.y += (dy / dist) * speed * dt;
+    }
+  }
+
+  // Атака с учетом кулдауна
+  function attack(a, b, now) {
+    if (now - a.lastAttack >= a.cooldown) {
+      b.hp -= a.damage;
+      a.lastAttack = now;
+      a.blink = true;
+      setTimeout(() => { a.blink = false; }, 50);
+    }
+  }
+
+  // Проверка коллизий для предотвращения наложения
+  function resolveCollisions() {
+    for (let i = 0; i < entities.length; i++) {
+      for (let j = i + 1; j < entities.length; j++) {
+        const a = entities[i];
+        const b = entities[j];
+        if (a.hp <= 0 || b.hp <= 0) continue;
+        const dist = distance(a, b);
+        const minDist = a.radius + b.radius;
+        if (dist < minDist && dist > 0) {
+          const overlap = (minDist - dist) / 2;
+          const dx = (a.x - b.x) / dist;
+          const dy = (a.y - b.y) / dist;
+          a.x += dx * overlap;
+          a.y += dy * overlap;
+          b.x -= dx * overlap;
+          b.y -= dy * overlap;
+        }
+      }
+    }
+  }
+
+  function updateEntities(dt, now) {
+    for (const e of entities) {
+      if (e.hp <= 0) continue;
+      const targetType = e.type === 'unit' ? 'enemy' : 'unit';
+      const target = findNearest(e, targetType);
+      if (!target) continue;
+
+      const dist = distance(e, target);
+      const attackRange = e.radius + target.radius + 2;
+
+      if (dist > attackRange) {
+        moveTowards(e, target, 80, dt);
+      } else {
+        attack(e, target, now);
+      }
+    }
+
+    resolveCollisions();
+
+    // Удаляем мертвых
+    entities = entities.filter(e => e.hp > 0);
+  }
+
+  function drawEntities() {
+    ctx.clearRect(0, 0, W, H);
+    for (const e of entities) {
+      // Мигать при атаке
+      if (e.blink) continue;
+
+      // Тело
+      ctx.beginPath();
+      ctx.fillStyle = e.color;
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Эмоджи
+      ctx.fillStyle = '#fff';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(e.emoji, e.x, e.y);
+
+      // HP бар
+      const barWidth = 24;
+      const barHeight = 4;
+      const hpPercent = Math.max(e.hp / e.maxHp, 0);
+      ctx.fillStyle = 'red';
+      ctx.fillRect(e.x - barWidth/2, e.y + e.radius + 6, barWidth, barHeight);
+      ctx.fillStyle = 'limegreen';
+      ctx.fillRect(e.x - barWidth/2, e.y + e.radius + 6, barWidth * hpPercent, barHeight);
+
+      // Цифровое HP
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px monospace';
+      ctx.fillText(Math.max(0, Math.floor(e.hp)), e.x, e.y + e.radius + 18);
+    }
+  }
+
+  function showMessage(msg, showRestart = false) {
+    overlay.style.display = 'flex';
+    message.textContent = msg;
+    restartBtn.style.display = showRestart ? 'inline-block' : 'none';
+  }
+
+  function hideMessage() {
+    overlay.style.display = 'none';
+  }
+
+  function restartGame() {
+    gold = 100;
+    lives = 5;
+    wave = 1;
+    waveTimer = 60;
+    waveActive = false;
+    upgradeLevel = 0;
+    goldPerSec = 0;
+    lastGoldTick = 0;
+    entities = [];
+    buyCooldowns.fill(0);
+    generateUnitButtons();
+    generateUpgradeButtons();
+    updateUI();
+    hideMessage();
+    waveBtn.disabled = false;
+    waveBtn.textContent = "▶ Старт Волны";
+  }
+
+  restartBtn.onclick = () => {
+    restartGame();
+  };
+
+  function updateUI() {
+    goldEl.textContent = gold;
+    livesEl.textContent = lives;
+    waveEl.textContent = wave;
+    timerEl.textContent = waveActive ? Math.ceil(waveTimer) : 0;
+    generateUnitButtons();
+    generateUpgradeButtons();
+  }
+
+  // Начать волну
+  function startWave() {
+    if (waveActive) return;
+    if (entities.filter(e => e.type === 'unit').length === 0) {
+      alert('Разместите хотя бы одного юнита перед стартом волны!');
+      return;
+    }
+    waveActive = true;
+    waveTimer = 60;
+    entities = entities.filter(e => e.type === 'unit'); // Удаляем врагов с прошлой волны
+    generateEnemies();
+    waveBtn.textContent = '■ Остановить волну';
+  }
+
+  // Остановить волну
+  function stopWave() {
+    waveActive = false;
+    waveBtn.textContent = '▶ Старт Волны';
+  }
+
+  waveBtn.onclick = () => {
+    if (!waveActive) startWave();
+    else stopWave();
+  };
+
+  // Основной цикл
+  function gameLoop(time = 0) {
+    if (!lastTime) lastTime = time;
+    const dt = (time - lastTime) / 1000;
+    lastTime = time;
+
+    if (waveActive) {
+      waveTimer -= dt;
+      if (waveTimer < 0) waveTimer = 0;
+
+      // Начисляем золото каждую секунду
+      if (time - lastGoldTick > 1000) {
+        gold += goldPerSec;
+        lastGoldTick = time;
+      }
+
+      updateEntities(dt, time / 1000);
+      updateUI();
+
+      // Проверяем состояние волны
+      const enemiesLeft = entities.filter(e => e.type === 'enemy').length;
+      const unitsLeft = entities.filter(e => e.type === 'unit').length;
+
+      if (enemiesLeft === 0) {
+        // Победа по уничтожению всех врагов — начисляем бонус за оставшееся время
+        const bonusGold = Math.floor(goldPerSec * waveTimer);
+        gold += 100 + bonusGold + (wave * 10);
+        wave++;
+        waveActive = false;
+        waveBtn.textContent = '▶ Старт Волны';
+        showMessage(`🎉 Победа!\nНаграда: 100 + ${bonusGold} (за время) + ${wave*10}\nВсего золота: ${gold}`, false);
+      } else if (waveTimer === 0 && enemiesLeft > 0) {
+        // Проигрыш по истечении времени с живыми врагами
+        lives--;
+        waveActive = false;
+        waveBtn.textContent = '▶ Старт Волны';
+        if (lives <= 0) {
+          showMessage(`💀 Поражение!\nЖизни закончились`, true);
+          waveBtn.disabled = true;
+        } else {
+          showMessage(`⏰ Время вышло!\n−1 жизнь\nОсталось: ${lives}`, false);
+        }
+      }
+    } else {
+      updateUI();
+    }
+
+    drawEntities();
+    requestAnimationFrame(gameLoop);
+  }
+
+  // Инициализация
+  restartGame();
+  requestAnimationFrame(gameLoop);
+
+  // Для мобильного экрана - запрет скролла при касании канваса
+  canvas.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+})();
+</script>
+
+</body>
+</html>
