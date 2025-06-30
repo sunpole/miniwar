@@ -211,47 +211,55 @@
   const buyCooldowns = [0,0,0];
 
   function generateUnitButtons() {
-    unitsPanel.innerHTML = '';
-    unitTypes.forEach((unit, i) => {
-      const btn = document.createElement('button');
-      btn.textContent = `${unit.emoji} ${unit.name}\n💰${unit.cost} | ❤️${unit.hp} | ⚔️${unit.damage}`;
-      btn.disabled = gold < unit.cost;
-      btn.onclick = () => buyUnit(i);
-      unitsPanel.appendChild(btn);
+  unitsPanel.innerHTML = '';
+  unitTypes.forEach((unit, i) => {
+    const btn = document.createElement('button');
+    btn.textContent = `${unit.emoji} ${unit.name}\n💰${unit.cost} | ❤️${unit.hp} | ⚔️${unit.damage}`;
+    btn.disabled = gold < unit.cost;
+    btn.addEventListener('click', () => {
+      console.log('clicked unit', i);
+      buyUnit(i);
     });
-  }
+    unitsPanel.appendChild(btn);
+  });
+}
+
 
   function generateUpgradeButtons() {
-    upgradesPanel.innerHTML = '';
-    upgrades.forEach((upg, i) => {
-      const btn = document.createElement('button');
-      btn.textContent = `⬆️ Улучшение ${i+1}\n💰${upg.cost}`;
-      btn.disabled = i !== upgradeLevel || gold < upg.cost;
-      btn.onclick = () => {
-        if (gold >= upg.cost && i === upgradeLevel) {
-          gold -= upg.cost;
-          goldEl.textContent = gold;
-          upg.effect();
-          upgradeLevel++;
-          generateUpgradeButtons();
-          generateUnitButtons();
-        }
-      };
-      upgradesPanel.appendChild(btn);
+  upgradesPanel.innerHTML = '';
+  upgrades.forEach((upg, i) => {
+    const btn = document.createElement('button');
+    btn.textContent = `⬆️ Улучшение ${i+1}\n💰${upg.cost}`;
+    btn.disabled = i !== upgradeLevel || gold < upg.cost;
+    btn.addEventListener('click', () => {
+      console.log('clicked upgrade', i);
+      if (gold >= upg.cost && i === upgradeLevel) {
+        gold -= upg.cost;
+        goldEl.textContent = gold;
+        upg.effect();
+        upgradeLevel++;
+        generateUpgradeButtons();
+        generateUnitButtons();
+      }
     });
-  }
+    upgradesPanel.appendChild(btn);
+  });
+}
+
 
   function buyUnit(i) {
-    const now = Date.now();
-    const unit = unitTypes[i];
-    if (gold < unit.cost) return;
-    if (now - buyCooldowns[i] < unit.buyCooldown) return;
-    gold -= unit.cost;
-    goldEl.textContent = gold;
-    buyCooldowns[i] = now;
-    spawnUnit(unit);
-    generateUnitButtons();
-  }
+  const now = Date.now();
+  const unit = unitTypes[i];
+  if (gold < unit.cost) return;
+  if (now - buyCooldowns[i] < unit.buyCooldown) return;
+  gold -= unit.cost;
+  goldEl.textContent = gold;
+  buyCooldowns[i] = now;
+  spawnUnit(unit);
+  console.log(`Unit purchased: ${unit.name}`);
+  generateUnitButtons();
+}
+
 
   function spawnUnit(u) {
     // Случайное место, но не ближе 20px к краям
@@ -432,10 +440,11 @@
   }
 
   function showMessage(msg, showRestart = false) {
-    overlay.style.display = 'flex';
-    message.textContent = msg;
-    restartBtn.style.display = showRestart ? 'inline-block' : 'none';
-  }
+  overlay.style.display = 'flex';
+  message.textContent = msg;
+  restartBtn.style.display = showRestart ? 'inline-block' : 'none';
+}
+
 
   function hideMessage() {
     overlay.style.display = 'none';
@@ -475,17 +484,18 @@
 
   // Начать волну
   function startWave() {
-    if (waveActive) return;
-    if (entities.filter(e => e.type === 'unit').length === 0) {
-      alert('Разместите хотя бы одного юнита перед стартом волны!');
-      return;
-    }
-    waveActive = true;
-    waveTimer = 60;
-    entities = entities.filter(e => e.type === 'unit'); // Удаляем врагов с прошлой волны
-    generateEnemies();
-    waveBtn.textContent = '■ Остановить волну';
+  if (waveActive) return;
+  if (entities.filter(e => e.type === 'unit').length === 0) {
+    alert('Разместите хотя бы одного юнита перед стартом волны!');
+    return;
   }
+  waveActive = true;
+  waveTimer = 60;
+  entities = entities.filter(e => e.type === 'unit'); // Удаляем врагов с прошлой волны
+  generateEnemies();
+  waveBtn.textContent = '■ Остановить волну';
+}
+
 
   // Остановить волну
   function stopWave() {
@@ -494,9 +504,16 @@
   }
 
   waveBtn.onclick = () => {
-    if (!waveActive) startWave();
-    else stopWave();
-  };
+  if (!waveActive) {
+    console.log('clicked start wave');
+    hideMessage(); // скрываем overlay, если было сообщение победы или поражения
+    startWave();
+  } else {
+    console.log('clicked stop wave');
+    stopWave();
+  }
+};
+
 
   // Основной цикл
   function gameLoop(time = 0) {
