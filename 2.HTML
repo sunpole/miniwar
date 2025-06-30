@@ -153,6 +153,10 @@
 (() => {
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
+
+// Отключаем действия по умолчанию для касаний (например, прокрутка, масштабирование)
+  canvas.style.touchAction = 'none';
+
   const goldEl = document.getElementById('gold');
   const timerEl = document.getElementById('timer');
   const waveEl = document.getElementById('wave');
@@ -177,6 +181,8 @@
   let lastGoldTick = 0;
   let entities = [];
   let lastTime = 0;
+  let buyCooldowns = [0, 0, 0]; // Массив для отслеживания времени последней покупки для каждого типа юнита
+
 
   const unitTypes = [
     { name: 'Мечник', cost: 5, hp: 10, damage: 1, cooldown: 0.5, buyCooldown: 2000, color: 'blue', emoji: '⚔️' },
@@ -185,53 +191,91 @@
   ];
 
   const upgrades = [
-    { cost: 100, effect: () => { goldPerSec += 1; } },
-    { cost: 250, effect: () => {
-      goldPerSec += 1;
-      unitTypes.forEach(u => u.buyCooldown = Math.max(500, u.buyCooldown - 200));
-    } },
-    { cost: 400, effect: () => {
-      goldPerSec += 1;
-      unitTypes.forEach(u => u.damage += 1);
-    } },
-    { cost: 600, effect: () => {
-      goldPerSec += 1;
-      unitTypes.forEach(u => u.buyCooldown = Math.max(500, u.buyCooldown - 200));
-    } },
-    { cost: 800, effect: () => {
-      goldPerSec += 1;
-      unitTypes.forEach(u => {
-        u.damage += 2;
-        u.buyCooldown = Math.max(500, u.buyCooldown - 200);
-      });
-    } }
+    {
+      cost: 100,
+      effect: () => { goldPerSec += 1; },
+      description: 'Увеличение золота в секунду +1',
+    },
+    {
+      cost: 250,
+      effect: () => {
+        goldPerSec += 1;
+        unitTypes.forEach(u => u.buyCooldown = Math.max(500, u.buyCooldown - 200));
+      },
+      description: 'Увеличение золота в секунду +1 и уменьшение кулдауна покупки',
+    },
+    {
+      cost: 400,
+      effect: () => {
+        goldPerSec += 1;
+        unitTypes.forEach(u => u.damage += 1);
+      },
+      description: 'Увеличение золота в секунду +1 и повышение урона юнитов',
+    },
+    {
+      cost: 600,
+      effect: () => {
+        goldPerSec += 1;
+        unitTypes.forEach(u => u.buyCooldown = Math.max(500, u.buyCooldown - 200));
+      },
+      description: 'Увеличение золота в секунду +1 и дальнейшее уменьшение кулдауна покупки',
+    },
+    {
+      cost: 800,
+      effect: () => {
+        goldPerSec += 1;
+        unitTypes.forEach(u => {
+          u.damage += 2;
+          u.buyCooldown = Math.max(500, u.buyCooldown - 200);
+        });
+      },
+      description: 'Увеличение золота в секунду +1, повышение урона и уменьшение кулдауна',
+    }
   ];
 
-  // Отслеживаем кулдауны покупки для кнопок
-  const buyCooldowns = [0,0,0];
 
-  function generateUnitButtons() {
+function generateUnitButtons() {
   unitsPanel.innerHTML = '';
+  const now = Date.now();
+
   unitTypes.forEach((unit, i) => {
     const btn = document.createElement('button');
     btn.textContent = `${unit.emoji} ${unit.name}\n💰${unit.cost} | ❤️${unit.hp} | ⚔️${unit.damage}`;
-    btn.disabled = gold < unit.cost;
+
+    // Проверяем кулдаун покупки и золото с защитой
+    const lastBuy = buyCooldowns[i] || 0;
+    const onCooldown = unit.buyCooldown ? (now - lastBuy < unit.buyCooldown) : false;
+    btn.disabled = gold < unit.cost || onCooldown;
+
+    // Визуальный индикатор кулдауна (требуется CSS класс 'cooldown')
+    if (onCooldown) {
+      btn.classList.add('cooldown');
+    } else {
+      btn.classList.remove('cooldown');
+    }
+
     btn.addEventListener('click', () => {
       console.log('clicked unit', i);
       buyUnit(i);
     });
+
     unitsPanel.appendChild(btn);
   });
 }
+
+
 
 
   function generateUpgradeButtons() {
   upgradesPanel.innerHTML = '';
   upgrades.forEach((upg, i) => {
     const btn = document.createElement('button');
-    btn.textContent = `⬆️ Улучшение ${i+1}\n💰${upg.cost}`;
+    btn.textContent = `⬆️ Улучшение ${i + 1}\n💰${upg.cost}`;
     btn.disabled = i !== upgradeLevel || gold < upg.cost;
+    
     btn.addEventListener('click', () => {
+      if (btn.disabled) return;  // Предотвращаем срабатывание на отключенной кнопке
+      
       console.log('clicked upgrade', i);
       if (gold >= upg.cost && i === upgradeLevel) {
         gold -= upg.cost;
@@ -242,271 +286,407 @@
         generateUnitButtons();
       }
     });
+
     upgradesPanel.appendChild(btn);
   });
 }
 
 
-  function buyUnit(i) {
+function buyUnit(i) {
   const now = Date.now();
   const unit = unitTypes[i];
-  if (gold < unit.cost) return;
-  if (now - buyCooldowns[i] < unit.buyCooldown) return;
+  if (!unit) return; // Проверка существования юнита
+  if (gold < unit.cost) return; // Недостаточно золота
+  if (now - buyCooldowns[i] < unit.buyCooldown) return; // Кулдаун на покупку
+
   gold -= unit.cost;
   goldEl.textContent = gold;
+
   buyCooldowns[i] = now;
   spawnUnit(unit);
+
   console.log(`Unit purchased: ${unit.name}`);
-  generateUnitButtons();
+
+  generateUnitButtons(); // Обновляем кнопки, чтобы отключить, если не хватает золота
 }
 
 
-  function spawnUnit(u) {
-    // Случайное место, но не ближе 20px к краям
-    const x = 20 + Math.random() * (W - 40);
-    const y = 20 + Math.random() * (H - 40);
-    entities.push({
-      type: 'unit',
-      name: u.name,
-      hp: u.hp,
-      maxHp: u.hp,
-      damage: u.damage,
-      cooldown: u.cooldown,
-      x, y,
-      lastAttack: 0,
-      blink: false,
-      color: u.color,
-      emoji: u.emoji,
-      radius: 12
-    });
-  }
 
-  function spawnEnemy(t) {
-    const hp = t === 'red' ? 6 : 9;
-    const damage = t === 'red' ? 2 : 1;
-    const color = t === 'red' ? 'red' : 'yellow';
-    const emoji = t === 'red' ? '😡' : '😐';
-    const x = 20 + Math.random() * (W - 40);
-    const y = 20 + Math.random() * (H - 40);
-    entities.push({
-      type: 'enemy',
-      hp, maxHp: hp,
-      damage,
-      cooldown: 1,
-      x, y,
-      lastAttack: 0,
-      blink: false,
-      color,
-      emoji,
-      radius: 12
-    });
-  }
+ function spawnUnit(u) {
+  // Генерируем случайную позицию, отступая по 20px от краев канваса
+  const x = 20 + Math.random() * (W - 40);
+  const y = 20 + Math.random() * (H - 40);
 
-  // Генерация врагов с минимумом 3 шт.
-  function generateEnemies() {
-    let hpSum = 0;
-    const power = Math.floor(gold / 2);
-    let tries = 0;
-    while ((hpSum < power || tries < 3) && tries < 50) {
-      const t = Math.random() < 0.5 ? 'red' : 'yellow';
-      const hp = t === 'red' ? 6 : 9;
-      if (hpSum + hp <= power || tries < 3) {
-        spawnEnemy(t);
-        hpSum += hp;
-      }
-      tries++;
-    }
-  }
-
-  // Расстояние между двумя сущностями
-  function distance(a, b) {
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  }
-
-  // Находит ближайшего юнита или врага (в зависимости от type)
-  function findNearest(from, type) {
-    let minDist = Infinity;
-    let target = null;
-    for (const e of entities) {
-      if (e.type !== type || e.hp <= 0) continue;
-      const d = distance(from, e);
-      if (d < minDist) {
-        minDist = d;
-        target = e;
-      }
-    }
-    return target;
-  }
-
-  // Двигает сущность a к b с учетом скорости и deltaTime
-  function moveTowards(a, b, speed, dt) {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist > 1) {
-      a.x += (dx / dist) * speed * dt;
-      a.y += (dy / dist) * speed * dt;
-    }
-  }
-
-  // Атака с учетом кулдауна
-  function attack(a, b, now) {
-    if (now - a.lastAttack >= a.cooldown) {
-      b.hp -= a.damage;
-      a.lastAttack = now;
-      a.blink = true;
-      setTimeout(() => { a.blink = false; }, 50);
-    }
-  }
-
-  // Проверка коллизий для предотвращения наложения
-  function resolveCollisions() {
-    for (let i = 0; i < entities.length; i++) {
-      for (let j = i + 1; j < entities.length; j++) {
-        const a = entities[i];
-        const b = entities[j];
-        if (a.hp <= 0 || b.hp <= 0) continue;
-        const dist = distance(a, b);
-        const minDist = a.radius + b.radius;
-        if (dist < minDist && dist > 0) {
-          const overlap = (minDist - dist) / 2;
-          const dx = (a.x - b.x) / dist;
-          const dy = (a.y - b.y) / dist;
-          a.x += dx * overlap;
-          a.y += dy * overlap;
-          b.x -= dx * overlap;
-          b.y -= dy * overlap;
-        }
-      }
-    }
-  }
-
-  function updateEntities(dt, now) {
-    for (const e of entities) {
-      if (e.hp <= 0) continue;
-      const targetType = e.type === 'unit' ? 'enemy' : 'unit';
-      const target = findNearest(e, targetType);
-      if (!target) continue;
-
-      const dist = distance(e, target);
-      const attackRange = e.radius + target.radius + 2;
-
-      if (dist > attackRange) {
-        moveTowards(e, target, 80, dt);
-      } else {
-        attack(e, target, now);
-      }
-    }
-
-    resolveCollisions();
-
-    // Удаляем мертвых
-    entities = entities.filter(e => e.hp > 0);
-  }
-
-  function drawEntities() {
-    ctx.clearRect(0, 0, W, H);
-    for (const e of entities) {
-      // Мигать при атаке
-      if (e.blink) continue;
-
-      // Тело
-      ctx.beginPath();
-      ctx.fillStyle = e.color;
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Эмоджи
-      ctx.fillStyle = '#fff';
-      ctx.font = '14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(e.emoji, e.x, e.y);
-
-      // HP бар
-      const barWidth = 24;
-      const barHeight = 4;
-      const hpPercent = Math.max(e.hp / e.maxHp, 0);
-      ctx.fillStyle = 'red';
-      ctx.fillRect(e.x - barWidth/2, e.y + e.radius + 6, barWidth, barHeight);
-      ctx.fillStyle = 'limegreen';
-      ctx.fillRect(e.x - barWidth/2, e.y + e.radius + 6, barWidth * hpPercent, barHeight);
-
-      // Цифровое HP
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.fillText(Math.max(0, Math.floor(e.hp)), e.x, e.y + e.radius + 18);
-    }
-  }
-
-  function showMessage(msg, showRestart = false) {
-  overlay.style.display = 'flex';
-  message.textContent = msg;
-  restartBtn.style.display = showRestart ? 'inline-block' : 'none';
+  entities.push({
+    type: 'unit',
+    name: u.name,
+    hp: u.hp,
+    maxHp: u.hp,
+    damage: u.damage,
+    cooldown: u.cooldown,
+    x: x,
+    y: y,
+    lastAttack: 0,
+    blink: false,
+    color: u.color,
+    emoji: u.emoji,
+    radius: 12
+  });
 }
 
 
-  function hideMessage() {
-    overlay.style.display = 'none';
-  }
-
-  function restartGame() {
-    gold = 100;
-    lives = 5;
-    wave = 1;
-    waveTimer = 60;
-    waveActive = false;
-    upgradeLevel = 0;
-    goldPerSec = 0;
-    lastGoldTick = 0;
-    entities = [];
-    buyCooldowns.fill(0);
-    generateUnitButtons();
-    generateUpgradeButtons();
-    updateUI();
-    hideMessage();
-    waveBtn.disabled = false;
-    waveBtn.textContent = "▶ Старт Волны";
-  }
-
-  restartBtn.onclick = () => {
-    restartGame();
+  function spawnEnemy(type) {
+  const enemyStats = {
+    red:   { hp: 6, damage: 2, color: 'red',    emoji: '😡' },
+    yellow:{ hp: 9, damage: 1, color: 'yellow', emoji: '😐' }
   };
 
-  function updateUI() {
-    goldEl.textContent = gold;
-    livesEl.textContent = lives;
-    waveEl.textContent = wave;
-    timerEl.textContent = waveActive ? Math.ceil(waveTimer) : 0;
-    generateUnitButtons();
-    generateUpgradeButtons();
+  const stats = enemyStats[type] || enemyStats.yellow;
+
+  const x = 20 + Math.random() * (W - 40);
+  const y = 20 + Math.random() * (H - 40);
+
+  entities.push({
+    type: 'enemy',
+    hp: stats.hp,
+    maxHp: stats.hp,
+    damage: stats.damage,
+    cooldown: 1,
+    x, y,
+    lastAttack: 0,
+    blink: false,
+    color: stats.color,
+    emoji: stats.emoji,
+    radius: 12
+  });
+}
+
+
+  // Генерация врагов с минимумом 3 шт.
+function generateEnemies() {
+  let hpSum = 0;
+  const power = Math.floor(gold / 2);
+  let tries = 0;
+  let enemiesCount = 0;
+  
+  while ((hpSum < power || enemiesCount < 3) && tries < 50) {
+    const t = Math.random() < 0.5 ? 'red' : 'yellow';
+    const hp = t === 'red' ? 6 : 9;
+    if (hpSum + hp <= power || enemiesCount < 3) {
+      spawnEnemy(t);
+      hpSum += hp;
+      enemiesCount++;
+    }
+    tries++;
+  }
+}
+
+
+  // Расстояние между двумя сущностями
+function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+// Находит ближайшего юнита или врага (в зависимости от type)
+function findNearest(from, type) {
+  let minDist = Infinity;
+  let target = null;
+  for (const e of entities) {
+    if (e.type !== type || e.hp <= 0) continue;
+    const d = distance(from, e);
+    if (d < minDist) {
+      minDist = d;
+      target = e;
+    }
+  }
+  return target;
+}
+
+// Двигает сущность a к b с учетом скорости и deltaTime
+function moveTowards(a, b, speed, dt) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 0) {
+    const step = speed * dt;
+    if (step >= dist) {
+      a.x = b.x;
+      a.y = b.y;
+    } else {
+      a.x += (dx / dist) * step;
+      a.y += (dy / dist) * step;
+    }
+  }
+}
+
+
+ // Атака с учетом кулдауна и защитой от отрицательного HP
+function attack(a, b, now) {
+  if (now - a.lastAttack >= a.cooldown) {
+    b.hp = Math.max(0, b.hp - a.damage); // HP не может стать ниже 0
+    a.lastAttack = now;
+    a.blink = true;
+    setTimeout(() => { a.blink = false; }, 100); // увеличил мигание для лучшей видимости
+  }
+}
+
+// Проверка коллизий для предотвращения наложения сущностей
+function resolveCollisions() {
+  for (let i = 0; i < entities.length; i++) {
+    for (let j = i + 1; j < entities.length; j++) {
+      const a = entities[i];
+      const b = entities[j];
+      if (a.hp <= 0 || b.hp <= 0) continue;
+
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dist = Math.hypot(dx, dy);
+      const minDist = a.radius + b.radius;
+
+      if (dist > 0 && dist < minDist) {
+        const overlap = (minDist - dist) / 2;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const pushStrength = 0.8; // плавность сдвига
+
+        a.x += nx * overlap * pushStrength;
+        a.y += ny * overlap * pushStrength;
+        b.x -= nx * overlap * pushStrength;
+        b.y -= ny * overlap * pushStrength;
+
+        // Можно ограничить координаты по границам, например:
+        a.x = Math.min(Math.max(a.x, a.radius), W - a.radius);
+        a.y = Math.min(Math.max(a.y, a.radius), H - a.radius);
+        b.x = Math.min(Math.max(b.x, b.radius), W - b.radius);
+        b.y = Math.min(Math.max(b.y, b.radius), H - b.radius);
+
+      } else if (dist === 0) {
+        const randAngle = Math.random() * 2 * Math.PI;
+        const smallShift = 2; // чуть больше сдвиг
+        a.x += Math.cos(randAngle) * smallShift;
+        a.y += Math.sin(randAngle) * smallShift;
+        b.x -= Math.cos(randAngle) * smallShift;
+        b.y -= Math.sin(randAngle) * smallShift;
+      }
+    }
+  }
+}
+
+
+  function updateEntities(dt, now) {
+  for (const e of entities) {
+    if (e.hp <= 0) continue;
+
+    // Определяем тип цели: юнит атакует врагов, враг атакует юнитов
+    const targetType = e.type === 'unit' ? 'enemy' : 'unit';
+    const target = findNearest(e, targetType);
+    if (!target) continue;
+
+    const dist = distance(e, target);
+    const attackRange = e.radius + target.radius + 2;
+
+    if (dist > attackRange) {
+      // Если цель далеко — двигаемся к ней
+      moveTowards(e, target, 80, dt);
+    } else {
+      // Если в радиусе атаки — атакуем
+      attack(e, target, now);
+    }
   }
 
-  // Начать волну
-  function startWave() {
+  // После движения и атак корректируем позиции, чтобы избежать наложений
+  resolveCollisions();
+
+  // Удаляем мертвых
+  entities = entities.filter(e => e.hp > 0);
+}
+
+
+
+function drawEntities() {
+  ctx.clearRect(0, 0, W, H);
+
+  for (const e of entities) {
+    // Мигать при атаке — пропускаем рисование в этот кадр
+    if (e.blink) continue;
+
+    // Рисуем тело круга
+    ctx.beginPath();
+    ctx.fillStyle = e.color;
+    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Рисуем эмоджи поверх круга
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(e.emoji, e.x, e.y);
+
+    // Рисуем HP-бар
+    const barWidth = 24;
+    const barHeight = 4;
+    const hpPercent = Math.max(e.hp / e.maxHp, 0);
+    ctx.fillStyle = 'red';
+    ctx.fillRect(e.x - barWidth / 2, e.y + e.radius + 6, barWidth, barHeight);
+    ctx.fillStyle = 'limegreen';
+    ctx.fillRect(e.x - barWidth / 2, e.y + e.radius + 6, barWidth * hpPercent, barHeight);
+
+    // Цифровое значение HP под баром
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px monospace';
+    ctx.fillText(Math.max(0, Math.floor(e.hp)), e.x, e.y + e.radius + 18);
+  }
+}
+
+
+
+restartBtn.onclick = () => {
+  hideMessage();
+  restartGame();
+};
+
+
+
+ function showMessage(msg, showRestart = false, callback = null) {
+  overlay.style.opacity = '0';
+  overlay.style.display = 'flex';
+  
+  // Поддержка переноса строк — заменяем \n на <br>
+  message.innerHTML = msg.replace(/\n/g, '<br>');
+  
+  restartBtn.style.display = showRestart ? 'inline-block' : 'none';
+
+  // Плавно показываем оверлей
+  requestAnimationFrame(() => {
+    overlay.style.transition = 'opacity 0.3s ease';
+    overlay.style.opacity = '1';
+  });
+
+  if (typeof callback === 'function') {
+    // Вызов callback после окончания анимации (300ms)
+    setTimeout(() => {
+      callback();
+    }, 300);
+  }
+}
+
+
+function hideMessage(callback = null) {
+  overlay.style.transition = 'opacity 0.3s ease';
+  overlay.style.opacity = '0';
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    if (typeof callback === 'function') callback();
+  }, 300);
+}
+
+function restartGame() {
+  gold = 100;
+  lives = 5;
+  wave = 1;
+  waveTimer = 60;
+  waveActive = false;
+  upgradeLevel = 0;
+  goldPerSec = 0;
+  lastGoldTick = 0;
+  entities = [];
+  buyCooldowns.fill(0);
+
+  // buyCooldowns = [0, 0, 0]; // Сброс к начальному состоянию
+
+
+  generateUnitButtons();
+  generateUpgradeButtons();
+  updateUI();
+  hideMessage();
+  waveBtn.disabled = false;
+  waveBtn.textContent = "▶ Старт Волны";
+}
+
+
+// Обновляем интерфейс, включая кнопки и другие элементы
+updateUI();
+
+hideMessage();
+
+waveBtn.disabled = false;
+waveBtn.textContent = "▶ Старт Волны";
+
+
+function updateUI() {
+  goldEl.textContent = gold;
+  livesEl.textContent = lives;
+  waveEl.textContent = wave;
+  timerEl.textContent = waveActive ? Math.ceil(waveTimer) : 0;
+
+  // Обновляем состояние кнопок юнитов
+  if (unitsPanel.children.length === unitTypes.length) {
+  const now = Date.now();
+  Array.from(unitsPanel.children).forEach((btn, i) => {
+    const onCooldown = (now - buyCooldowns[i]) < unitTypes[i].buyCooldown;
+    btn.disabled = gold < unitTypes[i].cost || onCooldown;
+    if (onCooldown) {
+      btn.classList.add('cooldown');
+    } else {
+      btn.classList.remove('cooldown');
+    }
+  });
+}
+
+
+  // Обновляем состояние кнопок улучшений
+  if (upgradesPanel.children.length === upgrades.length) {
+    Array.from(upgradesPanel.children).forEach((btn, i) => {
+      btn.disabled = (i !== upgradeLevel) || (gold < upgrades[i].cost);
+    });
+  }
+}
+
+
+// Начать волну
+function startWave() {
   if (waveActive) return;
+
+  // Проверяем, есть ли хотя бы один юнит
   if (entities.filter(e => e.type === 'unit').length === 0) {
     alert('Разместите хотя бы одного юнита перед стартом волны!');
     return;
   }
+
   waveActive = true;
   waveTimer = 60;
-  entities = entities.filter(e => e.type === 'unit'); // Удаляем врагов с прошлой волны
+
+  // Оставляем только юнитов (удаляем врагов с прошлой волны)
+  entities = entities.filter(e => e.type === 'unit');
+
   generateEnemies();
+
   waveBtn.textContent = '■ Остановить волну';
+
+  updateUI();
 }
 
+// Остановить волну с потерей жизни
+function stopWave() {
+  waveActive = false;
+  waveBtn.textContent = '▶ Старт Волны';
 
-  // Остановить волну
-  function stopWave() {
-    waveActive = false;
-    waveBtn.textContent = '▶ Старт Волны';
+  lives--;
+  updateUI();
+
+  if (lives <= 0) {
+    showMessage('💀 Поражение!\nЖизни закончились', true);
+    waveBtn.disabled = true;
+  } else {
+    showMessage(`⏰ Волна остановлена!\n−1 жизнь\nОсталось жизней: ${lives}`, false);
   }
+}
 
-  waveBtn.onclick = () => {
+waveBtn.onclick = () => {
   if (!waveActive) {
     console.log('clicked start wave');
-    hideMessage(); // скрываем overlay, если было сообщение победы или поражения
+    hideMessage();
     startWave();
   } else {
     console.log('clicked stop wave');
@@ -514,57 +694,58 @@
   }
 };
 
+// Основной цикл
+function gameLoop(time = 0) {
+  if (!lastTime) lastTime = time;
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
 
-  // Основной цикл
-  function gameLoop(time = 0) {
-    if (!lastTime) lastTime = time;
-    const dt = (time - lastTime) / 1000;
-    lastTime = time;
+  if (waveActive) {
+    waveTimer -= dt;
+    if (waveTimer < 0) waveTimer = 0;
 
-    if (waveActive) {
-      waveTimer -= dt;
-      if (waveTimer < 0) waveTimer = 0;
+    while (time - lastGoldTick >= 1000) {
+      gold += goldPerSec;
+      lastGoldTick += 1000;
+    }
+    goldEl.textContent = gold;
 
-      // Начисляем золото каждую секунду
-      if (time - lastGoldTick > 1000) {
-        gold += goldPerSec;
-        lastGoldTick = time;
-      }
+    updateEntities(dt, time / 1000);
 
-      updateEntities(dt, time / 1000);
+    const enemiesLeft = entities.filter(e => e.type === 'enemy').length;
+
+    if (enemiesLeft === 0) {
+      const bonusGold = Math.floor(goldPerSec * waveTimer);
+      const reward = wave * 10;
+      gold += 100 + bonusGold + reward;
+      waveActive = false;
+      waveBtn.textContent = '▶ Старт Волны';
       updateUI();
-
-      // Проверяем состояние волны
-      const enemiesLeft = entities.filter(e => e.type === 'enemy').length;
-      const unitsLeft = entities.filter(e => e.type === 'unit').length;
-
-      if (enemiesLeft === 0) {
-        // Победа по уничтожению всех врагов — начисляем бонус за оставшееся время
-        const bonusGold = Math.floor(goldPerSec * waveTimer);
-        gold += 100 + bonusGold + (wave * 10);
-        wave++;
-        waveActive = false;
-        waveBtn.textContent = '▶ Старт Волны';
-        showMessage(`🎉 Победа!\nНаграда: 100 + ${bonusGold} (за время) + ${wave*10}\nВсего золота: ${gold}`, false);
-      } else if (waveTimer === 0 && enemiesLeft > 0) {
-        // Проигрыш по истечении времени с живыми врагами
-        lives--;
-        waveActive = false;
-        waveBtn.textContent = '▶ Старт Волны';
-        if (lives <= 0) {
-          showMessage(`💀 Поражение!\nЖизни закончились`, true);
-          waveBtn.disabled = true;
-        } else {
-          showMessage(`⏰ Время вышло!\n−1 жизнь\nОсталось: ${lives}`, false);
-        }
-      }
-    } else {
+      showMessage(`🎉 Победа!\nНаграда: 100 + ${bonusGold} (за время) + ${reward}\nВсего золота: ${gold}`, false);
+      wave++;
+    } else if (waveTimer === 0 && enemiesLeft > 0) {
+      lives--;
+      waveActive = false;
+      waveBtn.textContent = '▶ Старт Волны';
       updateUI();
+      if (lives <= 0) {
+        showMessage(`💀 Поражение!\nЖизни закончились`, true);
+        waveBtn.disabled = true;
+      } else {
+        showMessage(`⏰ Время вышло!\n−1 жизнь\nОсталось: ${lives}`, false);
+      }
     }
 
-    drawEntities();
-    requestAnimationFrame(gameLoop);
+    updateUI();
+  } else {
+    updateUI();
   }
+
+  drawEntities();
+  requestAnimationFrame(gameLoop);
+}
+
+
 
   // Инициализация
   restartGame();
