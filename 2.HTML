@@ -3,25 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Маленькая Война 11.0</title>
+  <title>Маленькая Война 12.0</title>
   
 
 <style>
 
-/* Запрет выделения текста */
+/* ===== Запрет выделения текста и контекстного меню ===== */
 body, html, * {
   user-select: none;           /* Запрет выделения текста во всех браузерах */
   -webkit-user-select: none;   /* Safari */
   -moz-user-select: none;      /* Firefox */
   -ms-user-select: none;       /* IE10+ */
 }
-
-/* Запрет контекстного меню (правый клик) */
 body {
   -webkit-touch-callout: none; /* Запрет вызова контекстного меню на iOS */
 }
 
-
+/* ===== Общие стили ===== */
 html, body {
   margin: 0;
   padding: 0;
@@ -31,12 +29,14 @@ html, body {
   overflow: hidden;
 }
 
+/* ===== Контейнер всей игры ===== */
 #game {
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
 
+/* ===== Шапка и подвал ===== */
 .header, .footer {
   flex-shrink: 0;
   padding: 10px;
@@ -45,32 +45,91 @@ html, body {
   font-size: 14px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.5);
 }
-
 .header span, .footer span {
   margin: 0 10px;
 }
 
-.game-area {
-  flex: 1;
+/* ===== Контейнер игрового поля и оверлея ===== */
+.game-container {
   position: relative;
+  flex: 1; /* Занимает всё пространство между шапкой и кнопками */
   background: #222;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
+/* ===== Игровое поле (canvas) ===== */
 canvas {
   display: block;
-  margin: auto;
   background: #000;
   touch-action: none;
-  /* pointer-events: none; */
 }
 
+/* ===== Оверлей победы/поражения ===== */
+#overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  display: none; /* скрыт по умолчанию */
+  align-items: center;
+  justify-content: center;
+  z-index: 10; /* Над canvas, но под кнопками */
+  text-align: center;
+  box-sizing: border-box;
+  padding: 20px;
+}
+
+/* Окно с сообщением внутри оверлея */
+#overlay .modal-window {
+  max-width: 70vw;
+  max-height: 30vh;
+  width: 100%;
+  background: rgba(20, 20, 20, 0.9);
+  border-radius: 10px;
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: auto;
+  box-shadow: 0 0 15px rgba(0,255,0,0.7);
+}
+
+/* Кнопка внутри модального окна */
+#overlay button {
+  margin-top: 15px;
+  font-size: 16px;
+  padding: 8px 15px;
+  display: inline-block;
+  cursor: pointer;
+  border-radius: 8px;
+  border: none;
+  background: limegreen;
+  color: #000;
+  font-weight: bold;
+  transition: background 0.3s ease;
+}
+#overlay button:hover {
+  background: #0a0;
+}
+
+/* ===== Панель кнопок (юниты, апгрейды, старт волны) ===== */
 .button-panel {
+  position: relative;
+  z-index: 20; /* Поверх оверлея */
   display: flex;
   padding: 5px;
   background: #111;
   height: 40vh;
+  box-sizing: border-box;
 }
 
+/* Колонки с кнопками */
 .column {
   display: flex;
   flex-direction: column;
@@ -82,28 +141,28 @@ canvas {
   box-sizing: border-box;
 }
 
-/* Кнопки */
+/* ===== Кнопки ===== */
 button {
   cursor: pointer;
   flex: none;
-  min-height: 35px; /* уменьшена высота */
+  min-height: 35px; /* высота кнопок */
   background: linear-gradient(to bottom, #333, #222);
   color: #fff;
   border: 2px solid #555;
   border-radius: 10px;
-  padding: 6px 6px 6px 6px; /* добавлен отступ снизу для полоски */
-  font-size: 10px;
+  padding: 6px;
+  font-size: 10px; /* размер текста */
   font-weight: bold;
   box-shadow: 0 0 10px rgba(0,255,0,0);
   transition: all 0.3s ease;
   text-align: left;
-  white-space: normal; /* чтобы текст переносился */
+  white-space: normal; /* перенос текста */
   position: relative;
   overflow: hidden; /* для полоски кулдауна */
   display: flex;
   flex-direction: column;
   justify-content: center;
-  width: 100%; /* занимать всю ширину */
+  width: 100%; /* ширина 100% */
 }
 
 /* Контейнер текста внутри кнопки */
@@ -130,10 +189,10 @@ button:disabled {
   box-shadow: none;
 }
 
-/* Прогресс-бар кулдауна — теперь сверху кнопки */
+/* ===== Прогресс-бар кулдауна (сверху кнопки) ===== */
 button .cooldown-bar {
   position: absolute;
-  top: 0; /* сверху */
+  top: 0;
   left: 0;
   height: 6px;
   width: 100%;
@@ -157,52 +216,6 @@ button.glow {
   box-shadow: 0 0 10px #0f0;
 }
 
-/* Сам затемнённый фон — полный экран */
-#overlay {
-  position: fixed; /* fixed для надёжного позиционирования */
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0,0,0,0.85);
-  color: #fff;
-  display: flex;
-  align-items: flex-start; /* выравниваем по верху */
-  justify-content: center;
-  font-size: 20px;
-  flex-direction: column;
-  z-index: 10;
-  padding-top: 50px; /* Замените 50px на высоту вашей шапки */
-  box-sizing: border-box;
-  text-align: center;
-  display: none;
-}
-
-/* Окно с сообщением внутри оверлея */
-#overlay .modal-window {
-  max-width: 70vw;
-  max-height: 30vh;
-  width: 100%;
-  background: rgba(20, 20, 20, 0.9);
-  border-radius: 10px;
-  padding: 20px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  overflow: auto;
-  box-shadow: 0 0 15px rgba(0,255,0,0.7);
-}
-
-/* Кнопка внутри модального окна */
-#overlay button {
-  margin-top: 15px;
-  font-size: 16px;
-  padding: 8px 15px;
-  display: inline-block;
-}
-
 
 
 
@@ -210,15 +223,22 @@ button.glow {
 
 
 </head>
-<body><div id="game">
+
+
+<body>
+
+
+<div id="game">
   <div class="header">
     <span>💰 Золото: <span id="gold">100</span></span>
     <span>🕒 Время: <span id="timer">60</span></span>
     <span>🌊 Волна: <span id="wave">1</span></span>
     <span>❤️: <span id="lives">5</span></span>
   </div>
-  <div class="game-area">
-    <canvas id="canvas" width="360" height="360"></canvas>
+
+  <!-- Обёртка для игрового поля и overlay -->
+  <div class="game-container" style="position: relative; flex: 1;">
+    <canvas id="canvas" width="360" height="360" style="display: block; margin: auto;"></canvas>
     <div id="overlay">
       <div class="modal-window">
         <div id="message"></div>
@@ -226,6 +246,8 @@ button.glow {
       </div>
     </div>
   </div>
+
+  <!-- Панель кнопок остаётся отдельной, всегда видимой -->
   <div class="button-panel">
     <div class="column" id="units"></div>
     <div class="column" id="upgrades"></div>
@@ -236,6 +258,7 @@ button.glow {
     </div>
   </div>
 </div>
+
 
 <script>
 
