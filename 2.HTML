@@ -5,121 +5,123 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Маленькая Война</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: #0a0a0a;
-      color: #fff;
-      overflow: hidden;
-    }
-    #game {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    .header, .footer {
-      flex-shrink: 0;
-      padding: 10px;
-      text-align: center;
-      background: linear-gradient(to right, #1e1e1e, #2c2c2c);
-      font-size: 14px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-    }
-    .header span, .footer span {
-      margin: 0 10px;
-    }
-    .game-area {
-      flex: 1;
-      position: relative;
-      background: #222;
-    }
-    canvas {
-      display: block;
-      margin: auto;
-      background: #000;
-      touch-action: none;
-      pointer-events: none;
-    }
-    .button-panel {
-      display: flex;
-      padding: 5px;
-      background: #111;
-      height: 25vh;
-    }
-    .column {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      gap: 5px;
-      justify-content: space-evenly;
-    }
-    button {
-      flex: 1;
-      background: linear-gradient(to bottom, #333, #222);
-      color: #fff;
-      border: 2px solid #555;
-      border-radius: 10px;
-      padding: 8px;
-      font-size: 12px;
-      font-weight: bold;
-      box-shadow: 0 0 10px rgba(0,255,0,0);
-      transition: all 0.3s ease;
-      text-align: left;
-      white-space: pre-line;
-      position: relative;
-    }
-    button:hover:not(:disabled), button:focus-visible:not(:disabled) {
-      box-shadow: 0 0 15px rgba(0,255,0,0.5);
-      background: linear-gradient(to bottom, #444, #222);
-    }
-    button:disabled {
-      background: #2a2a2a;
-      color: #666;
-      border-color: #333;
-      box-shadow: none;
-    }
-    button.cooldown::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      height: 100%;
-      width: 100%;
-      background: rgba(0, 255, 0, 0.2);
-      transform-origin: left;
-      transform: scaleX(0);
-      transition: transform linear;
-      pointer-events: none;
-    }
-    button.glow {
-      box-shadow: 0 0 10px #0f0;
-    }
-    #overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.85);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      flex-direction: column;
-      display: none;
-      z-index: 10;
-      text-align: center;
-      padding: 20px;
-    }
-    #overlay button {
-      margin-top: 15px;
-      font-size: 16px;
-      padding: 8px 15px;
-      display: none;
-    }
-  </style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #0a0a0a;
+    color: #fff;
+    overflow: hidden;
+  }
+  #game {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  .header, .footer {
+    flex-shrink: 0;
+    padding: 10px;
+    text-align: center;
+    background: linear-gradient(to right, #1e1e1e, #2c2c2c);
+    font-size: 14px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+  }
+  .header span, .footer span {
+    margin: 0 10px;
+  }
+  .game-area {
+    flex: 1;
+    position: relative;
+    background: #222;
+  }
+  canvas {
+    display: block;
+    margin: auto;
+    background: #000;
+    touch-action: none;
+    pointer-events: none;
+  }
+  .button-panel {
+    display: flex;
+    padding: 5px;
+    background: #111;
+    height: 25vh;
+  }
+  .column {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 5px;
+    justify-content: space-evenly;
+  }
+  button {
+    cursor: pointer;
+    flex: 1;
+    background: linear-gradient(to bottom, #333, #222);
+    color: #fff;
+    border: 2px solid #555;
+    border-radius: 10px;
+    padding: 8px;
+    font-size: 12px;
+    font-weight: bold;
+    box-shadow: 0 0 10px rgba(0,255,0,0);
+    transition: all 0.3s ease;
+    text-align: left;
+    white-space: pre-line;
+    position: relative;
+  }
+  button:hover:not(:disabled), button:focus-visible:not(:disabled) {
+    box-shadow: 0 0 15px rgba(0,255,0,0.5);
+    background: linear-gradient(to bottom, #444, #222);
+  }
+  button:disabled {
+    background: #2a2a2a;
+    color: #666;
+    border-color: #333;
+    box-shadow: none;
+  }
+  button.cooldown::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    background: rgba(0, 255, 0, 0.2);
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform linear;
+    pointer-events: none;
+  }
+  button.glow {
+    box-shadow: 0 0 10px #0f0;
+  }
+  #overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.85);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-direction: column;
+    display: none;
+    z-index: 10;
+    text-align: center;
+    padding: 20px;
+  }
+  #overlay button {
+    margin-top: 15px;
+    font-size: 16px;
+    padding: 8px 15px;
+    display: none;
+  }
+</style>
+
 </head>
 <body>
 <div id="game">
